@@ -19,6 +19,8 @@ class Image(models.Model):
     # AI 分析生成的标签，存储为JSON字符串
     tags = models.TextField(blank=True, null=True, verbose_name="AI标签")
     is_public = models.BooleanField(default=False)  # 个人图片默认私有
+    colors = models.JSONField(default=list)  # 默认空
+    category_id = models.IntegerField(null=True, blank=True, verbose_name="种类ID")
 
     def __str__(self):
         return self.title or f"Image {self.id}"
