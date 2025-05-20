@@ -12,9 +12,10 @@ Pillow
 
 qiniu==7.16.0 # 七牛云 SDK
 requests==2.32.3
-torch
-torchvision
-sympy
+torch==2.7.0
+torchvision==0.22.0
+sympy==1.14.0
+colorthief==0.2.1
 
 
 django-storages[qiniu]
