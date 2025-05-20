@@ -1,140 +1,208 @@
-# from qiniu import Auth, put_file, etag
-# import qiniu.config
+#
+# from qiniu import Auth, put_file, BucketManager, urlsafe_base64_encode
+# import requests
+# import time
+# import hmac
+# import hashlib
+# from urllib.parse import quote
+# import base64
+# from sympy.integrals.meijerint_doc import category
+#
+# from ai_image import ai_image
 #
 #
-# def upload_to_qiniu(access_key, secret_key, bucket_name, file_path, key):
+# def hmac_sha1(signing_str: str, secret_key: str) -> str:
 #     """
-#     上传文件到七牛云存储
-#     :param access_key: AK
-#     :param secret_key: SK
-#     :param bucket_name: 存储空间名
-#     :param file_path: 本地文件路径
-#     :param key: 上传到七牛云后的文件名（可包含路径）
-#     :return: 外链URL或None
+#     生成 HMAC-SHA1 签名
+#     :param signing_str: 待签名的字符串
+#     :param secret_key: 密钥（需与API要求一致，如七牛云的SecretKey）
+#     :return: Base64编码的签名结果
 #     """
-#     # 鉴权对象
+#     # 将密钥和字符串转换为字节（UTF-8编码）
+#     key_bytes = secret_key.encode('utf-8')
+#     msg_bytes = signing_str.encode('utf-8')
+#
+#     # 计算 HMAC-SHA1 摘要
+#     digest = hmac.new(key_bytes, msg_bytes, hashlib.sha1).digest()
+#
+#     # 将摘要转换为 Base64 字符串
+#     return base64.b64encode(digest).decode('utf-8')
+#
+# def upload_and_set_metadata(access_key, secret_key, bucket_name, file_path, key, tags, category):
 #     q = Auth(access_key, secret_key)
 #
-#     # 生成上传凭证
+#     # 第一步：上传文件
 #     token = q.upload_token(bucket_name, key, 3600)
-#
-#     # 上传文件
 #     ret, info = put_file(token, key, file_path)
 #
-#     if ret and ret.get('key') == key:
-#         # 构建外链URL（假设使用测试域名，生产环境建议绑定自定义域名）
-#         base_url = 'https://portal.qiniu.com/cdn/domain/sv81ux7sp.hn-bkt.clouddn.com'  # 替换为你的空间域名
-#         url = f'{base_url}/{key}'
-#         return url
-#     else:
-#         print("上传失败:", info)
+#     if not ret or ret.get('key') != key:
+#         print("文件上传失败:", info.text_body)
 #         return None
 #
+#     # 第二步：构造双重URL编码的路径参数
+#     entry = f"{bucket_name}:{key}"
+#     encodedEntryURI = urlsafe_base64_encode(entry) # 双重编码
 #
-# # 使用示例
+#     # 构造MIME占位参数
+#     encoded_mime =urlsafe_base64_encode("")  # 空字符串双重编码
+#
+#     stat_url = f"https://rs.qiniuapi.com/stat/{encodedEntryURI}"
+#     stat_token = q.token_of_request(stat_url)
+#     print(stat_url)
+#     response = requests.post(stat_url, headers={"Authorization": f"QBox {stat_token}"})
+#     print(response.text)  # 应返回文件信息，而非 401
+#
+#     # 构造元数据参数
+#     meta_parts = []
+#     metadata = {
+#         "x-qn-meta-user": "user01",
+#         "x-qn-meta-tags": ",".join(tags),
+#         "x-qn-meta-category": category
+#     }
+#     meta_key = "x-qn-meta-user"
+#     meta_value = "aaa"
+#     request_path = (f"/chgm/{encodedEntryURI}/mime/{urlsafe_base64_encode('img/jpeg')}/"
+#                   f"x-qn-meta-user/{urlsafe_base64_encode(metadata['x-qn-meta-user'])}/"
+#                     f"x-qn-meta-tags/{urlsafe_base64_encode(metadata['x-qn-meta-tags'])}/"
+#                     f"x-qn-meta-category/{urlsafe_base64_encode(metadata['x-qn-meta-category'])}")
+#     full_url = f"https://rs.qiniuapi.com{request_path}"
+#
+#     # 4. 使用SDK生成签名（推荐）
+#     token = q.token_of_request(request_path)
+#     headers = {"Authorization":f"QBox {token}"}
+#
+#     # 5. 发送请求
+#     response = requests.post(full_url, headers=headers)
+#     print(response.text)
+#     print("Request Path:", request_path)
+#     print("Full URL:", full_url)
+#     print("Token:", token)
+#     print("Status Code:", response.status_code)
+#     if response.status_code != 200:
+#         print("元数据设置失败:", response.text)
+#         return None
+#
+#     base_url = 'http://sv81ux7sp.hn-bkt.clouddn.com'
+#
+#     return f'{base_url}/{key}'
+#
+#
 # if __name__ == "__main__":
-#     access_key = "EbD9A-35XSz-qMgyZ1D1odgh9ul5b6muX20ZS38W"
-#     secret_key = "5ZvQ5yTJXduayu3bOh_36WbBLhfEpHZano-jLOGd"
-#     bucket_name = "photox666"
-#     local_file = "aaa.png"  # 本地图片路径
-#     file_key = "images/aaa.png"  # 七牛云中的路径+文件名
-#
-#     url = upload_to_qiniu(access_key, secret_key, bucket_name, local_file, file_key)
+#     access_key = "NT8GPMLylWq3_WIl9aNk1zAUWTJtoWrGGVqbvKxh"
+#     secret_key = "uNj2QCpEElzFF4ZkFkvjrBrDITB9ZpO_0ixDbfXD"
+#     bucket_name = "photoxw"
+#     local_file = "aa.png"
+#     file_key = f"images/{local_file}"
+#     tags,category=ai_image(local_file)
+#     url = upload_and_set_metadata(access_key, secret_key, bucket_name, local_file, file_key, tags, category)
 #     if url:
 #         print("文件外链:", url)
 
-from qiniu import Auth, put_file
+from qiniu import Auth, put_file, BucketManager, urlsafe_base64_encode
+import requests
 import time
-import os
-import traceback
-import logging
+import hmac
+import hashlib
+from urllib.parse import quote
+import base64
+from sympy.integrals.meijerint_doc import category
+from color import extract_colors_with_colorthief
+from ai_classify import image_classification
 
-logger = logging.getLogger(__name__)
 
-def upload_and_set_metadata(access_key, secret_key, bucket_name, file_path, key, tags, category):
+def hmac_sha1(signing_str: str, secret_key: str) -> str:
     """
-    优化版的七牛云上传函数，增强错误处理和日志记录
-    
-    参数:
-    - access_key: 七牛云访问密钥AK
-    - secret_key: 七牛云密钥SK
-    - bucket_name: 存储桶名称
-    - file_path: 本地文件路径
-    - key: 上传到七牛云后的文件名（可包含路径）
-    - tags: 文件标签，列表或字符串
-    - category: 文件分类
-    
-    返回:
-    - 上传成功返回文件URL，失败返回None
+    生成 HMAC-SHA1 签名
+    :param signing_str: 待签名的字符串
+    :param secret_key: 密钥（需与API要求一致，如七牛云的SecretKey）
+    :return: Base64编码的签名结果
     """
-    try:
-        # 检查文件是否存在
-        if not os.path.exists(file_path):
-            logger.error(f"要上传的文件不存在: {file_path}")
-            return None
-            
-        logger.info(f"准备上传文件到七牛云: {file_path}")
-        logger.info(f"文件大小: {os.path.getsize(file_path)} 字节")
-        logger.info(f"目标key: {key}")
-        logger.info(f"访问密钥: {access_key[:5]}...")
-        logger.info(f"桶名: {bucket_name}")
-        
-        # 验证参数
-        if not all([access_key, secret_key, bucket_name, file_path, key]):
-            logger.error("上传参数不完整")
-            return None
-        
-        # 初始化认证
-        try:
-            q = Auth(access_key, secret_key)
-            logger.info("七牛云认证初始化成功")
-        except Exception as e:
-            logger.error(f"七牛云认证初始化失败: {str(e)}")
-            return None
+    # 将密钥和字符串转换为字节（UTF-8编码）
+    key_bytes = secret_key.encode('utf-8')
+    msg_bytes = signing_str.encode('utf-8')
 
-        # 生成上传凭证
-        try:
-            token = q.upload_token(bucket_name, key, 3600)
-            logger.info(f"生成上传凭证成功")
-        except Exception as e:
-            logger.error(f"生成上传凭证失败: {str(e)}")
-            return None
-        
-        # 上传文件
-        try:
-            ret, info = put_file(token, key, file_path)
-            logger.info(f"上传结果: {ret}, 信息状态码: {info.status_code}")
-        except Exception as e:
-            logger.error(f"执行上传操作失败: {str(e)}")
-            logger.error(traceback.format_exc())
-            return None
+    # 计算 HMAC-SHA1 摘要
+    digest = hmac.new(key_bytes, msg_bytes, hashlib.sha1).digest()
 
-        if ret and ret.get('key') == key:
-            # 构建外链URL
-            base_url = 'http://sv81ux7sp.hn-bkt.clouddn.com'
-            file_url = f'{base_url}/{key}'
-            logger.info(f"上传成功，文件URL: {file_url}")
-            return file_url
-        else:
-            error_msg = info.text_body if hasattr(info, 'text_body') else str(info)
-            logger.error(f"上传失败: {error_msg}")
-            return None
-    except Exception as e:
-        logger.error(f"上传文件到七牛云出错: {str(e)}")
-        logger.error(traceback.format_exc())
+    # 将摘要转换为 Base64 字符串
+    return base64.b64encode(digest).decode('utf-8')
+
+def upload_and_set_metadata(access_key, secret_key, bucket_name, file_path, key,category_id,colors):
+    q = Auth(access_key, secret_key)
+
+    # 第一步：上传文件
+    token = q.upload_token(bucket_name, key, 3600)
+    ret, info = put_file(token, key, file_path)
+
+    if not ret or ret.get('key') != key:
+        print("文件上传失败:", info.text_body)
         return None
+
+    # 第二步：构造双重URL编码的路径参数
+    entry = f"{bucket_name}:{key}"
+    encodedEntryURI = urlsafe_base64_encode(entry) # 双重编码
+
+    # 构造MIME占位参数
+    encoded_mime =urlsafe_base64_encode("")  # 空字符串双重编码
+
+    stat_url = f"https://rs.qiniuapi.com/stat/{encodedEntryURI}"
+    stat_token = q.token_of_request(stat_url)
+    print(stat_url)
+    response = requests.post(stat_url, headers={"Authorization": f"QBox {stat_token}"})
+    print(response.text)  # 应返回文件信息，而非 401
+
+    # 构造元数据参数
+    meta_parts = []
+    metadata = {
+        "x-qn-meta-user": "user01",
+        "x-qn-meta-category": str(category_id),
+        "x-qn-meta-color": ",".join([f"({r},{g},{b})" for r, g, b in colors])
+    }
+    request_path = (
+        f"/chgm/{encodedEntryURI}/mime/{urlsafe_base64_encode('image/jpeg')}/"
+        f"x-qn-meta-user/{urlsafe_base64_encode(metadata['x-qn-meta-user'])}/"
+        f"x-qn-meta-category/{urlsafe_base64_encode(metadata['x-qn-meta-category'])}/"
+        f"x-qn-meta-color/{urlsafe_base64_encode(metadata['x-qn-meta-color'])}"  # 新增颜色字段
+    )
+    full_url = f"https://rs.qiniuapi.com{request_path}"
+
+    # 4. 使用SDK生成签名（推荐）
+    token = q.token_of_request(request_path)
+    headers = {"Authorization":f"QBox {token}"}
+
+    # 5. 发送请求
+    response = requests.post(full_url, headers=headers)
+    print(response.text)
+    print("Request Path:", request_path)
+    print("Full URL:", full_url)
+    print("Token:", token)
+    print("Status Code:", response.status_code)
+    if response.status_code != 200:
+        print("元数据设置失败:", response.text)
+        return None
+
+    base_url = 'http://sv1luzogb.hd-bkt.clouddn.com'
+    return f'{base_url}/{key}'
 
 
 if __name__ == "__main__":
-    # 测试上传
     access_key = "NT8GPMLylWq3_WIl9aNk1zAUWTJtoWrGGVqbvKxh"
     secret_key = "uNj2QCpEElzFF4ZkFkvjrBrDITB9ZpO_0ixDbfXD"
+    api_key = "sk-ff8f03a8cfbc03d7df75b7ddb6b1fb7f0bfc8116e02986306865aa9149741301"
     bucket_name = "photoxw"
-    local_file = "aa.png"
+    local_file = "abc.jpg"
     file_key = f"images/{local_file}"
-    tags = ["测试标签"]
-    category = "测试分类"
-    
-    url = upload_and_set_metadata(access_key, secret_key, bucket_name, local_file, file_key, tags, category)
+    category_map = {
+        0: "风景", 1: "人物肖像", 2: "动物", 3: "交通工具", 4: "食品",
+        5: "建筑", 6: "电子产品", 7: "运动器材", 8: "植物花卉", 9: "医疗用品",
+        10: "办公用品", 11: "服装鞋帽", 12: "家具家居", 13: "书籍文档", 14: "艺术创作",
+        15: "工业设备", 16: "体育赛事", 17: "天文地理", 18: "儿童玩具", 19: "美妆个护",
+        20: "军事装备", 21: "宠物用品", 22: "健身器材", 23: "厨房用品", 24: "实验室器材",
+        25: "音乐器材", 26: "户外装备", 27: "珠宝首饰", 28: "虚拟场景", 29: "其他"
+    }
+    colors = extract_colors_with_colorthief(local_file, num_colors=2)
+    result=image_classification(local_file,api_key)
+    category_id=result['category_id']
+    url = upload_and_set_metadata(access_key, secret_key, bucket_name, local_file, file_key, category_id,colors)
     if url:
         print("文件外链:", url)
