@@ -211,7 +211,7 @@ CORS_ALLOW_ALL_ORIGINS = True
 QINIU_ACCESS_KEY = os.getenv('QINIU_ACCESS_KEY', 'NT8GPMLylWq3_WIl9aNk1zAUWTJtoWrGGVqbvKxh')
 QINIU_SECRET_KEY = os.getenv('QINIU_SECRET_KEY', 'uNj2QCpEElzFF4ZkFkvjrBrDITB9ZpO_0ixDbfXD')
 QINIU_BUCKET_NAME = os.getenv('QINIU_BUCKET_NAME', 'photoxw')
-QINIU_BUCKET_URL = os.getenv('QINIU_BUCKET_URL', 'http://sv81ux7sp.hn-bkt.clouddn.com')
+# QINIU_BUCKET_URL = os.getenv('QINIU_BUCKET_URL', 'http://sv81ux7sp.hn-bkt.clouddn.com')
 
 # 如果需要使用 .env 文件，确保在项目根目录创建 .env 文件并写入类似内容:
 # DJANGO_SECRET_KEY=your_strong_secret_key
