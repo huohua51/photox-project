@@ -6,13 +6,6 @@ import traceback
 import os
 
 logger = logging.getLogger(__name__)
-def clean_tags(tags_raw):
-    cleaned_tags = []
-    for item in tags_raw:
-        item = item.replace('\n', ' ')      # 替换换行
-        item = item.strip(" '\"\t\r,")      # 去除首尾空格、引号、逗号、制表符等
-        cleaned_tags.append(item)
-    return cleaned_tags
 
 # 通用类别映射（全局常量）
 GENERIC_CATEGORIES = {
@@ -88,8 +81,6 @@ def ai_image(image_path, model_type="resnet50"):
             return ["未分类"], "其他"
             
         tags = [label for label, _ in results]
-        
-        tags = clean_tags(tags)
         logger.info(f"提取的标签: {tags}")
         
         category = get_generic_category(tags[0]) if tags else '其他'

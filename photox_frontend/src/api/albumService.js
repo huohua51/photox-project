@@ -1,8 +1,9 @@
-import api from './index'
+import apiService from './index'
+const api = apiService.api
 
 /**
  * 相册服务API
- * 提供相册的创建、获取、修改和删除功能
+ * 提供相册的创建、获取、修改功能
  */
 const albumService = {
   /**
@@ -66,20 +67,6 @@ const albumService = {
       return await api.put(`/albums/${albumId}/`, updateData)
     } catch (error) {
       console.error(`修改相册 ${albumId} 信息失败`, error)
-      throw error
-    }
-  },
-  
-  /**
-   * 删除相册
-   * @param {number|string} albumId - 要删除的相册ID
-   * @returns {Promise<void>}
-   */
-  deleteAlbum: async (albumId) => {
-    try {
-      return await api.delete(`/albums/${albumId}/`)
-    } catch (error) {
-      console.error(`删除相册 ${albumId} 失败`, error)
       throw error
     }
   },

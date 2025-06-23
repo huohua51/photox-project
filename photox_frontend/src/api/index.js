@@ -2,11 +2,8 @@ import axios from 'axios'
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: 'http://8.148.71.20:8000/api/v1', // API的基础URL，已加 /v1
+  baseURL: '/api/v1', // 使用相对路径，通过代理访问
   timeout: 30000, // 超时时间30秒
-  headers: {
-    'Content-Type': 'application/json'
-  }
 })
 
 // 是否正在刷新token
@@ -22,7 +19,7 @@ const refreshToken = async () => {
       throw new Error('No refresh token')
     }
     
-    const response = await axios.post('http://8.148.71.20:8000/api/v1/users/token/refresh/', {
+    const response = await api.post('/users/token/refresh/', {
       refresh: refresh
     })
     
@@ -46,6 +43,12 @@ api.interceptors.request.use(
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`
     }
+    
+    // 如果是 FormData，删除 Content-Type 让浏览器自动设置
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type']
+    }
+    
     return config
   },
   error => {
@@ -57,205 +60,126 @@ api.interceptors.request.use(
 // 响应拦截器
 api.interceptors.response.use(
   response => {
-    // 直接返回原始响应数据
+    // 直接返回响应数据
     return response.data
   },
   async error => {
     console.error('响应错误:', error)
-    const response = error.response
-    
-    // 处理特定状态码
-    if (response) {
-      switch (response.status) {
-        case 401:
-          // 登录接口遇到401时，不自动跳转，防止页面自动刷新死循环
-          if (response.config.url.includes('/users/login/')) {
-            localStorage.removeItem('token')
-            localStorage.removeItem('refresh_token')
-            // 只返回错误，不跳转
-            return Promise.reject(error)
-          }
-          // 如果是刷新token的请求失败，直接跳转登录
-          if (response.config.url.includes('/token/refresh/')) {
-            localStorage.removeItem('token')
-            localStorage.removeItem('refresh_token')
-            window.location.href = '/login'
-            return Promise.reject(error)
-          }
-          
-          // 如果正在刷新token，将请求加入重试队列
-          if (isRefreshing) {
-            return new Promise(resolve => {
-              retryRequests.push(() => {
-                resolve(api(response.config))
-              })
-            })
-          }
-          
-          isRefreshing = true
-          
-          try {
-            // 尝试刷新token
-            const newToken = await refreshToken()
-            // 更新请求头中的token
-            response.config.headers['Authorization'] = `Bearer ${newToken}`
-            // 重试队列中的请求
-            retryRequests.forEach(callback => callback())
-            retryRequests = []
-            // 重试当前请求
-            return api(response.config)
-          } catch (refreshError) {
-            retryRequests = []
-            return Promise.reject(refreshError)
-          } finally {
-            isRefreshing = false
-          }
-          
-        case 403:
-          console.error('没有权限访问此资源')
-          break
-        case 404:
-          console.error('请求的资源不存在')
-          break
-        case 500:
-          console.error('服务器错误')
-          break
-        default:
-          console.error(`未处理的错误状态码: ${response.status}`)
-      }
-      
-      // 返回服务器返回的错误信息
-      if (response.data && response.data.message) {
-        return Promise.reject(new Error(response.data.message))
-      }
+    // 如果是 500 错误，打印更详细的信息
+    if (error.response && error.response.status === 500) {
+      console.error('服务器错误详情:', {
+        status: error.response.status,
+        data: error.response.data,
+        headers: error.response.headers
+      })
     }
     return Promise.reject(error)
   }
 )
 
-/**
- * 登录函数 - 使用原生fetch，避免拦截器干扰
- */
-const login = async (username, password) => {
-  try {
-    console.log('开始登录请求...')
-    
-    const url = 'http://8.148.71.20:8000/api/v1/users/login/'
-    console.log(`发送登录请求到: ${url}`)
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ username, password })
-    })
-    
-    console.log(`登录响应状态: ${response.status} ${response.statusText}`)
-    
-    // 读取文本响应
-    const responseText = await response.text()
-    console.log(`登录响应内容: ${responseText}`)
-    
-    if (!response.ok) {
-      // 尝试解析错误消息
+// 导出API模块
+const apiService = {
+  // 认证相关
+  auth: {
+    // 登录
+    login: async (username, password) => {
       try {
-        const errorData = JSON.parse(responseText)
-        if (errorData.detail) {
-          throw new Error(errorData.detail)
-        } else if (errorData.message) {
-          throw new Error(errorData.message)
-        } else if (errorData.error) {
-          throw new Error(errorData.error)
-        } else if (errorData.non_field_errors) {
-          throw new Error(errorData.non_field_errors.join(', '))
-        }
-      } catch (parseError) {
-        // 如果解析失败，使用原始错误
-        console.error('无法解析错误响应:', parseError)
+        const response = await api.post('/users/login/', { username, password })
+        return response
+      } catch (error) {
+        console.error('登录请求失败:', error)
+        throw error
       }
-      throw new Error(`登录失败: ${response.status} ${responseText || response.statusText}`)
-    }
+    },
     
-    try {
-      // 尝试解析JSON
-      const data = JSON.parse(responseText)
-      console.log('解析后的响应:', data)
-      
-      // 标准化token格式
-      let result = {}
-      
-      // 情况1: {code: 0, message: "登录成功", data: {access, refresh}}
-      if (data.code === 0 && data.data && data.data.access && data.data.refresh) {
-        result = {
-          code: 0,
-          message: data.message || '登录成功',
-          data: {
-            access: data.data.access,
-            refresh: data.data.refresh
-          }
-        }
+    // 注册
+    register: async (userData) => {
+      try {
+        const response = await api.post('/users/register/', userData)
+        return response
+      } catch (error) {
+        console.error('注册请求失败:', error)
+        throw error
       }
-      // 情况2: {access, refresh} 直接返回token
-      else if (data.access && data.refresh) {
-        result = {
-          code: 0,
-          message: '登录成功',
-          data: {
-            access: data.access,
-            refresh: data.refresh
-          }
-        }
+    },
+    
+    // 获取当前用户信息
+    getCurrentUser: async () => {
+      try {
+        const response = await api.get('/users/me/')
+        return response
+      } catch (error) {
+        console.error('获取用户信息失败:', error)
+        throw error
       }
-      // 情况3: 其他非标准格式，尝试提取tokens
-      else {
-        console.warn('非标准登录响应格式:', data)
-        // 递归查找access和refresh token
-        const findTokens = (obj) => {
-          let tokens = { access: null, refresh: null }
-          if (!obj || typeof obj !== 'object') return tokens
-          
-          if (obj.access) tokens.access = obj.access
-          if (obj.refresh) tokens.refresh = obj.refresh
-          
-          // 遍历所有属性
-          for (const key in obj) {
-            if (obj[key] && typeof obj[key] === 'object') {
-              const found = findTokens(obj[key])
-              if (found.access) tokens.access = found.access
-              if (found.refresh) tokens.refresh = found.refresh
-            }
-          }
-          
-          return tokens
+    },
+    
+    // 更新用户信息
+    updateUser: async (userData) => {
+      try {
+        const response = await api.put('/users/me/', userData)
+        return response
+      } catch (error) {
+        console.error('更新用户信息失败:', error)
+        throw error
+      }
+    },
+    
+    // 刷新token
+    refreshToken: async () => {
+      try {
+        const refresh = localStorage.getItem('refresh_token')
+        if (!refresh) {
+          throw new Error('No refresh token')
         }
         
-        const tokens = findTokens(data)
-        if (tokens.access && tokens.refresh) {
-          result = {
-            code: 0,
-            message: '登录成功',
-            data: {
-              access: tokens.access,
-              refresh: tokens.refresh
-            }
-          }
-        } else {
-          throw new Error('无法从响应中提取token信息')
-        }
+        const response = await api.post('/users/token/refresh/', { refresh })
+        return response
+      } catch (error) {
+        console.error('刷新token失败:', error)
+        throw error
       }
-      
-      return result
-    } catch (e) {
-      console.error('JSON解析失败:', e)
-      throw new Error('无法解析服务器响应: ' + e.message)
     }
-  } catch (error) {
-    console.error('登录请求失败:', error)
-    throw error
-  }
+  },
+  
+  // 图片相关
+  images: {
+    // 获取图片列表
+    getList: async (params) => {
+      try {
+        const response = await api.get('/images/', { params })
+        return response
+      } catch (error) {
+        console.error('获取图片列表失败:', error)
+        throw error
+      }
+    },
+    
+    // 上传图片
+    upload: async (formData) => {
+      try {
+        const response = await api.post('/images/upload/', formData)
+        return response
+      } catch (error) {
+        console.error('上传图片失败:', error)
+        throw error
+      }
+    },
+    
+    // 获取图片详情
+    getDetail: async (id) => {
+      try {
+        const response = await api.get(`/images/${id}/`)
+        return response
+      } catch (error) {
+        console.error('获取图片详情失败:', error)
+        throw error
+      }
+    }
+  },
+  
+  // 导出原始api实例
+  api
 }
 
-api.login = login
-
-export default api
+export default apiService

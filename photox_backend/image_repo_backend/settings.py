@@ -15,8 +15,8 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-your-default-secret
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*'] # 开发时可以用 '*'，生产环境需要配置具体的域名
-
+#ALLOWED_HOSTS = ['*'] # 开发时可以用 '*'，生产环境需要配置具体的域名
+ALLOWED_HOSTS = ['8.148.71.20', 'localhost', '127.0.0.1']
 
 # Application definition
 
@@ -76,28 +76,28 @@ WSGI_APPLICATION = 'image_repo_backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/4.1/ref/settings/#databases
 
-# 默认 SQLite 配置
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
+# 默认 SQLite 
+DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',  # 或 os.path.join(BASE_DIR, 'db.sqlite3')
+            }
+}
 
 # ---> Database (改为 MySQL 配置) <---
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',         # 修改 ENGINE
-        'NAME': os.environ.get('MYSQL_DATABASE'),     # 读取 MySQL 环境变量
-        'USER': os.environ.get('MYSQL_USER'),         # 读取 MySQL 环境变量
-        'PASSWORD': os.environ.get('MYSQL_PASSWORD'), # 读取 MySQL 环境变量
-        'HOST': 'db',                                # Docker 服务名不变
-        'PORT': '3306',                             # MySQL 默认端口
+#DATABASES = {
+   # 'default': {
+       # 'ENGINE': 'django.db.backends.mysql',         # 修改 ENGINE
+      #  'NAME': os.environ.get('MYSQL_DATABASE'),     # 读取 MySQL 环境变量
+     #   'USER': os.environ.get('MYSQL_USER'),         # 读取 MySQL 环境变量
+    #    'PASSWORD': os.environ.get('MYSQL_PASSWORD'), # 读取 MySQL 环境变量
+   #     'HOST': 'db',                                # Docker 服务名不变
+  #      'PORT': '3306',                             # MySQL 默认端口
         # 'OPTIONS': { # 可选：如果需要指定字符集等
         #     'charset': 'utf8mb4',
         # },
-    }
-}
+ #   }
+#}
 
 # Password validation
 # https://docs.djangoproject.com/en/4.1/ref/settings/#auth-password-validators
@@ -122,12 +122,14 @@ USE_TZ = True # 建议保持 True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.1/howto/static-files/
 
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_URL = 'static/'
 # STATIC_ROOT = BASE_DIR / 'staticfiles' # 生产环境收集静态文件用
 
 # Media files (User uploaded files)
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media' # 用户上传文件（如头像）的本地存储路径
+# 在 settings.py 中
+MEDIA_ROOT = '/var/www/photox/media'# 用户上传文件（如头像）的本地存储路径
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
@@ -193,19 +195,35 @@ SIMPLE_JWT = {
 }
 
 
-# CORS 配置 (如果前端和后端不在同一个域)
-# 需要 pip install django-cors-headers 并在 INSTALLED_APPS 和 MIDDLEWARE 中添加
-# 或者允许所有源 (开发时方便，生产环境不推荐)
-CORS_ALLOW_ALL_ORIGINS = True
-# CORS_ALLOWED_ORIGINS = [
-#     "http://8.148.71.20",  # 你的前端服务器地址
-# ]
+# CORS 配置
+CORS_ORIGIN_ALLOW_ALL = True  # 允许所有源
+CORS_ALLOW_CREDENTIALS = True  # 允许携带凭证
 
-# 允许携带 Cookie (如果需要跨域 Session 或 CSRF)
-# CORS_ALLOW_CREDENTIALS = True
+# 允许的请求方法
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
 
+# 允许的请求头
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
-
+# 暴露响应头
+CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
 
 # 七牛云配置 (从环境变量读取，但提供默认值)
 QINIU_ACCESS_KEY = os.getenv('QINIU_ACCESS_KEY', 'NT8GPMLylWq3_WIl9aNk1zAUWTJtoWrGGVqbvKxh')

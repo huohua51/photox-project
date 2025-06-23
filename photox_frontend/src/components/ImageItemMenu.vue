@@ -10,6 +10,21 @@
     
     <!-- 下拉菜单 -->
     <div v-if="showMenu" class="dropdown-menu" @click.stop>
+      <div class="menu-item" @click="downloadImage">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span>下载图片</span>
+      </div>
+      <div class="menu-item" @click="openEditDialog">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        </svg>
+        <span>编辑信息</span>
+      </div>
       <div class="menu-item" @click="confirmDelete">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="3 6 5 6 21 6"></polyline>
@@ -21,7 +36,32 @@
       </div>
     </div>
     
-    <!-- 确认对话框 -->
+    <!-- 编辑对话框 -->
+    <div v-if="showEditDialog" class="edit-dialog" @click.stop>
+      <div class="dialog-content">
+        <h3>编辑图片信息</h3>
+        <div class="edit-form">
+          <div class="form-group">
+            <label>图片名称</label>
+            <input v-model="editTitle" type="text" class="input-field" placeholder="输入图片名称">
+          </div>
+          <div class="form-group">
+            <label>公开状态</label>
+            <div class="toggle-switch">
+              <input type="checkbox" v-model="editIsPublic" id="edit-public-toggle">
+              <label for="edit-public-toggle" class="toggle-label"></label>
+              <span class="toggle-text">{{ editIsPublic ? '公开' : '私有' }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="dialog-actions">
+          <button @click="cancelEdit" class="cancel-btn">取消</button>
+          <button @click="saveEdit" class="save-btn">保存</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 确认删除对话框 -->
     <div v-if="showConfirmDialog" class="confirm-dialog" @click.stop>
       <div class="dialog-content">
         <h3>确认删除</h3>
@@ -36,26 +76,84 @@
 </template>
 
 <script setup>
-import { ref,onMounted,onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import imageService from '../api/imageService'
+import { ElMessage } from 'element-plus'
 
 const props = defineProps({
   imageId: {
     type: [Number, String],
     required: true
+  },
+  imageTitle: {
+    type: String,
+    required: true
+  },
+  isPublic: {
+    type: Boolean,
+    required: true
+  },
+  imageUrl: {
+    type: String,
+    required: true
   }
 })
 
-const emit = defineEmits(['image-deleted'])
+const emit = defineEmits(['image-deleted', 'image-updated'])
 
 const showMenu = ref(false)
 const showConfirmDialog = ref(false)
+const showEditDialog = ref(false)
+const editTitle = ref('')
+const editIsPublic = ref(false)
 
 // 打开/关闭菜单
 const toggleMenu = () => {
   showMenu.value = !showMenu.value
   if (showConfirmDialog.value) {
     showConfirmDialog.value = false
+  }
+  if (showEditDialog.value) {
+    showEditDialog.value = false
+  }
+}
+
+// 打开编辑对话框
+const openEditDialog = () => {
+  editTitle.value = props.imageTitle
+  editIsPublic.value = props.isPublic
+  showEditDialog.value = true
+  showMenu.value = false
+}
+
+// 取消编辑
+const cancelEdit = () => {
+  showEditDialog.value = false
+}
+
+// 保存编辑
+const saveEdit = async () => {
+  try {
+    // 调用API更新图片信息
+    const response = await imageService.updateImage(props.imageId, {
+      title: editTitle.value,
+      is_public: editIsPublic.value
+    })
+    
+    if (response.code === 0) {
+      // 通知父组件图片已更新
+      emit('image-updated', {
+        id: props.imageId,
+        title: editTitle.value,
+        is_public: editIsPublic.value
+      })
+      showEditDialog.value = false
+    } else {
+      throw new Error(response.message || '更新失败')
+    }
+  } catch (error) {
+    console.error('更新图片信息失败:', error)
+    alert('更新失败，请稍后重试')
   }
 }
 
@@ -73,28 +171,78 @@ const cancelDelete = () => {
 // 删除图片
 const deleteImage = async () => {
   try {
-    // 调用API删除图片
-    // 注释掉的代码为实际API调用，目前使用模拟成功
-    // await imageService.deleteImage(props.imageId)
+    console.log('开始删除图片:', props.imageId)
+    const response = await imageService.deleteImage(props.imageId)
+    console.log('删除图片响应:', response)
     
-    console.log(`删除图片: ${props.imageId}`)
-    
-    // 通知父组件图片已删除
+    // 删除成功，通知父组件
     emit('image-deleted', props.imageId)
-    
-    // 关闭确认对话框
     showConfirmDialog.value = false
+    ElMessage.success('删除成功')
   } catch (error) {
     console.error('删除图片失败:', error)
-    // 这里可以添加错误处理逻辑
+    ElMessage.error('删除失败，请稍后重试')
+  }
+}
+
+// 下载图片
+const downloadImage = async () => {
+  try {
+    if (!props.imageUrl) {
+      throw new Error('图片地址不存在')
+    }
+
+    // 创建一个隐藏的 a 标签
+    const link = document.createElement('a')
+    
+    // 确保URL是完整的
+    const imageUrl = props.imageUrl.startsWith('http') 
+      ? props.imageUrl 
+      : `${import.meta.env.VITE_API_BASE_URL}${props.imageUrl}`
+    
+    link.href = imageUrl
+    
+    // 从 URL 中提取文件名，如果没有则使用时间戳
+    const fileName = props.imageTitle || `image_${Date.now()}`
+    let fileExtension = 'jpg' // 默认扩展名
+    
+    try {
+      // 尝试从URL中获取扩展名
+      const urlParts = imageUrl.split('.')
+      if (urlParts.length > 1) {
+        const ext = urlParts[urlParts.length - 1].toLowerCase()
+        // 验证扩展名是否合法
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+          fileExtension = ext
+        }
+      }
+    } catch (e) {
+      console.warn('无法从URL获取文件扩展名，使用默认扩展名')
+    }
+    
+    // 设置下载属性
+    link.download = `${fileName}.${fileExtension}`
+    
+    // 添加到文档中并触发点击
+    document.body.appendChild(link)
+    link.click()
+    
+    // 清理
+    document.body.removeChild(link)
+    
+    ElMessage.success('下载成功')
+  } catch (error) {
+    console.error('下载图片失败:', error)
+    ElMessage.error(error.message || '下载失败，请稍后重试')
   }
 }
 
 // 点击文档其他地方关闭菜单
 const handleClickOutside = (e) => {
-  if (showMenu.value || showConfirmDialog.value) {
+  if (showMenu.value || showConfirmDialog.value || showEditDialog.value) {
     showMenu.value = false
     showConfirmDialog.value = false
+    showEditDialog.value = false
   }
 }
 
@@ -114,26 +262,25 @@ onUnmounted(() => {
   top: 12px;
   right: 12px;
   z-index: 10;
-  opacity: 0; /* 默认隐藏 */
+  opacity: 0;
   transition: opacity 0.3s ease;
 }
 
-/* 图片项悬停时显示菜单图标 */
 .image-item:hover .image-menu-container {
   opacity: 1;
 }
 
 .menu-icon {
-  width: 36px;
-  height: 36px;
+  width: 2.5em;
+  height: 2.5em;
   border-radius: 50%;
   background-color: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: white;
-  transition: all 0.2s ease;
+  color: var(--text-color);
+  transition: all 0.3s ease;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
@@ -142,16 +289,21 @@ onUnmounted(() => {
   transform: scale(1.1);
 }
 
+.menu-icon svg {
+  width: 1.2em;
+  height: 1.2em;
+}
+
 .dropdown-menu {
   position: absolute;
-  top: 44px;
+  top: 3em;
   right: 0;
-  width: 160px;
-  background-color: #2b2b2b;
-  border-radius: 10px;
+  width: 12em;
+  background-color: var(--secondary-color);
+  border-radius: 0.8em;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
   z-index: 100;
-  border: 1px solid #3a3a3a;
+  border: 1px solid var(--border-color);
   animation: fadeInMenu 0.2s ease;
   overflow: hidden;
 }
@@ -164,15 +316,15 @@ onUnmounted(() => {
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
-  color: white;
+  gap: 0.8em;
+  padding: 0.8em 1em;
+  color: var(--text-color);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
 }
 
 .menu-item:hover {
-  background-color: #3a3a3a;
+  background-color: var(--bg-color);
 }
 
 .menu-item:first-child {
@@ -186,99 +338,177 @@ onUnmounted(() => {
 }
 
 .menu-item svg {
+  width: 1.2em;
+  height: 1.2em;
   flex-shrink: 0;
-  color: #ff4d4f;
 }
 
-.confirm-dialog {
+.menu-item:first-child svg {
+  color: var(--success-color);
+}
+
+.menu-item:last-child svg {
+  color: var(--error-color);
+}
+
+.edit-dialog {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  backdrop-filter: blur(4px);
-  animation: fadeIn 0.2s ease;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 .dialog-content {
-  background-color: #2b2b2b;
-  width: 90%;
-  max-width: 400px;
-  border-radius: 16px;
-  padding: 24px;
-  color: white;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-  animation: slideUp 0.3s ease;
-  border: 1px solid #3a3a3a;
-}
-
-@keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  background: var(--secondary-color);
+  border-radius: 0.8em;
+  padding: 1.2em;
+  width: 85%;
+  max-width: 20em;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-color);
 }
 
 .dialog-content h3 {
-  margin-top: 0;
-  color: #ff4d4f;
-  font-size: 1.5em;
-  margin-bottom: 16px;
+  color: var(--text-color);
+  font-size: 1.1em;
+  margin-bottom: 1em;
+  font-weight: 600;
 }
 
-.dialog-content p {
-  line-height: 1.6;
-  margin-bottom: 20px;
-  color: #ddd;
+.edit-form {
+  margin-bottom: 1.2em;
+}
+
+.form-group {
+  margin-bottom: 1em;
+}
+
+.form-group label {
+  display: block;
+  color: var(--text-color);
+  margin-bottom: 0.4em;
+  font-weight: 500;
+  font-size: 0.9em;
+}
+
+.input-field {
+  width: 100%;
+  padding: 0.6em;
+  border: 1px solid var(--border-color);
+  border-radius: 0.4em;
+  background: var(--bg-color);
+  color: var(--text-color);
+  font-size: 0.9em;
+  transition: all 0.3s ease;
+}
+
+.input-field:focus {
+  border-color: var(--primary-color);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(23, 111, 212, 0.1);
+}
+
+.toggle-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+}
+
+.toggle-switch input[type="checkbox"] {
+  display: none;
+}
+
+.toggle-label {
+  position: relative;
+  display: inline-block;
+  width: 2.6em;
+  height: 1.4em;
+  background: var(--bg-color);
+  border-radius: 0.7em;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.toggle-label:after {
+  content: '';
+  position: absolute;
+  width: 1.2em;
+  height: 1.2em;
+  border-radius: 50%;
+  background: var(--text-color);
+  top: 0.1em;
+  left: 0.1em;
+  transition: all 0.3s ease;
+}
+
+.toggle-switch input[type="checkbox"]:checked + .toggle-label {
+  background: var(--primary-color);
+}
+
+.toggle-switch input[type="checkbox"]:checked + .toggle-label:after {
+  transform: translateX(1.2em);
+}
+
+.toggle-text {
+  color: var(--text-color);
+  font-size: 0.85em;
 }
 
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  margin-top: 24px;
+  gap: 0.6em;
+  margin-top: 1.2em;
 }
 
 .dialog-actions button {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
+  padding: 0.5em 1em;
+  border-radius: 0.4em;
   font-weight: 500;
-  transition: all 0.2s ease;
-  font-size: 1em;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: all 0.3s ease;
 }
 
 .cancel-btn {
-  background-color: #4b4b4b;
-  color: white;
+  background: var(--bg-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
 }
 
 .cancel-btn:hover {
-  background-color: #5a5a5a;
-  transform: translateY(-2px);
+  background: var(--secondary-color);
+}
+
+.save-btn {
+  background: var(--primary-color);
+  color: white;
+  border: none;
+}
+
+.save-btn:hover {
+  opacity: 0.9;
 }
 
 .delete-btn {
-  background-color: #ff4d4f;
-  color: white;
+  background-color: var(--error-color);
+  color: var(--text-color);
 }
 
 .delete-btn:hover {
-  background-color: #ff6668;
+  background-color: var(--error-color);
+  opacity: 0.9;
   transform: translateY(-2px);
   box-shadow: 0 2px 8px rgba(255, 77, 79, 0.4);
 }
 
-.delete-btn:active, .cancel-btn:active {
+.delete-btn:active, .cancel-btn:active, .save-btn:active {
   transform: translateY(0);
 }
 </style> 

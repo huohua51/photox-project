@@ -11,6 +11,17 @@
             <div class="nav-menu">
                 <router-link to="/" class="nav-item">首页</router-link>
                 <router-link to="/gallery" class="nav-item">个人仓库</router-link>
+                
+                <!-- 主题切换按钮 -->
+                <button @click="toggleTheme" class="theme-toggle" :title="themeStore.isDarkMode ? '切换到亮色模式' : '切换到暗色模式'">
+                    <svg v-if="themeStore.isDarkMode" class="theme-icon" viewBox="0 0 24 24">
+                        <path fill="currentColor" d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0l1.06-1.06z"/>
+                    </svg>
+                    <svg v-else class="theme-icon" viewBox="0 0 24 24">
+                        <path fill="currentColor" d="M9.37 5.51c-.18.64-.27 1.31-.27 1.99 0 4.08 3.32 7.4 7.4 7.4.68 0 1.35-.09 1.99-.27C17.45 17.19 14.93 19 12 19c-3.86 0-7-3.14-7-7 0-2.93 1.81-5.45 4.37-6.49zM12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-2.98 0-5.4-2.42-5.4-5.4 0-1.81.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z"/>
+                    </svg>
+                </button>
+
                 <div class="user-controls">
                     <!-- 未登录状态 -->
                     <div v-if="!isLoggedIn" class="auth-buttons">
@@ -57,14 +68,16 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from '@/api/axios'
+import { useThemeStore } from '../stores/theme'
+import api from '../api'
 //   import UserIcon from '../../public/svg/usericon.svg'
 //   import SettingsIcon from '@/assets/icons/settings.svg'
 //   import LogoutIcon from '../../public/svg/logouticon.svg'
 //   import defaultAvatar from '../../public/img/userImage.png'
 
 const router = useRouter()
-const isLoggedIn = ref(false)
+const themeStore = useThemeStore()
+const isLoggedIn = ref(true)
 const showMenu = ref(false)
 const defaultAvatar = '/img/userImage.png'
 
@@ -78,19 +91,19 @@ const user = ref({
 // 获取用户信息
 const fetchUserInfo = async () => {
     try {
-        const res = await axios.get('/api/v1/users/me/')
-        console.log('获取用户信息响应:', res)
+        const response = await api.auth.getCurrentUser()
+        console.log('获取用户信息响应:', response)
         
-        if (res.data && res.data.code === 0 && res.data.data) {
+        if (response && response.data) {
             user.value = {
-                name: res.data.data.username,
-                email: res.data.data.email,
-                avatar: res.data.data.avatar || defaultAvatar
+                name: response.data.username,
+                email: response.data.email,
+                avatar: response.data.avatar || defaultAvatar
             }
             isLoggedIn.value = true
             console.log('用户信息获取成功:', user.value)
         } else {
-            console.error('获取用户信息响应格式错误:', res.data)
+            console.error('获取用户信息响应格式错误:', response)
             throw new Error('获取用户信息失败')
         }
     } catch (error) {
@@ -151,15 +164,21 @@ const logout = () => {
     }
     router.push('/login')
 }
+
+// 切换主题
+const toggleTheme = () => {
+    themeStore.toggleTheme()
+}
 </script>
   
 <style scoped>
 .navbar {
-    background: #1a1a1a;
+    background: var(--bg-color);
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
     width: 100%;
     top: 0;
     z-index: 1000;
+    transition: background-color 0.3s;
 }
 
 .nav-container {
@@ -175,11 +194,12 @@ const logout = () => {
     display: flex;
     align-items: center;
     gap: 12px;
-    color: white;
+    color: var(--text-color);
     text-decoration: none;
     font-size: 1.5rem;
     font-weight: 600;
     margin-left: 20px;
+    transition: color 0.3s ease;
 }
 
 .logo {
@@ -194,7 +214,8 @@ const logout = () => {
 }
 
 .nav-item {
-    color: #e0e0e0;
+    color: var(--text-color);
+    font-weight: bold;
     text-decoration: none;
     font-size: 1.1rem;
     padding: 0.5rem 1rem;
@@ -203,11 +224,13 @@ const logout = () => {
 }
 
 .nav-item:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--primary-color);
+    color: white;
+    opacity: 1;
 }
 
 .router-link-active {
-    color: #176fd4;
+    color: var(--primary-color);
     font-weight: 500;
 }
 
@@ -226,14 +249,14 @@ const logout = () => {
 }
 
 .login {
-    background: #176fd4;
-    color: white;
+    background: var(--primary-color);
+    color: var(--text-color);
 }
 
 .register {
-    background: transparent;
-    border: 2px solid #176fd4;
-    color: #176fd4;
+    background: var(--secondary-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
 }
 
 .user-menu-wrapper {
@@ -259,27 +282,30 @@ const logout = () => {
     position: absolute;
     right: 0;
     top: 55px;
-    background: #2b2b2b;
+    background: var(--secondary-color);
     border-radius: 8px;
     width: 240px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     padding: 1rem;
     z-index: 100;
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
 }
 
 .user-info {
     padding-bottom: 1rem;
-    border-bottom: 1px solid #404040;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .username {
-    color: white;
+    color: var(--text-color);
     font-weight: 600;
     margin-bottom: 0.3rem;
 }
 
 .email {
-    color: #888;
+    color: var(--text-color);
+    opacity: 0.7;
     font-size: 0.9rem;
 }
 
@@ -292,24 +318,37 @@ const logout = () => {
     align-items: center;
     gap: 12px;
     padding: 0.8rem;
-    color: #e0e0e0;
+    font-weight: bold;
+    color: var(--text-color);
     text-decoration: none;
     border-radius: 6px;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
 }
 
 .menu-item:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--primary-color);
+    color: white;
 }
 
 .logout {
-    color: #ff5252;
+    color: var(--error-color);
+}
+
+.logout:hover {
+    background: var(--primary-color);
+    color: white;
 }
 
 .icon {
     width: 18px;
     height: 18px;
     fill: currentColor;
+    filter: brightness(0.6);
+    transition: filter 0.3s ease;
+}
+
+.menu-item:hover .icon {
+    filter: brightness(1);
 }
 
 /* 过渡动画 */
@@ -335,5 +374,27 @@ const logout = () => {
     .brand span {
         display: none;
     }
+}
+
+.theme-toggle {
+    background: none;
+    border: none;
+    color: var(--text-color);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.3s;
+}
+
+.theme-toggle:hover {
+    background-color: var(--secondary-color);
+}
+
+.theme-icon {
+    width: 24px;
+    height: 24px;
 }
 </style>

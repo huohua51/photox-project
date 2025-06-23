@@ -181,7 +181,8 @@ def upload_and_set_metadata(access_key, secret_key, bucket_name, file_path, key,
         print("元数据设置失败:", response.text)
         return None
 
-    base_url = 'http://sv1luzogb.hd-bkt.clouddn.com'
+    base_url = 'http://swlqbhcct.hn-bkt.clouddn.com'
+    
     return f'{base_url}/{key}'
 
 
@@ -189,7 +190,7 @@ if __name__ == "__main__":
     access_key = "NT8GPMLylWq3_WIl9aNk1zAUWTJtoWrGGVqbvKxh"
     secret_key = "uNj2QCpEElzFF4ZkFkvjrBrDITB9ZpO_0ixDbfXD"
     api_key = "sk-ff8f03a8cfbc03d7df75b7ddb6b1fb7f0bfc8116e02986306865aa9149741301"
-    bucket_name = "photoxw"
+    bucket_name = "photoxa"
     local_file = "abc.jpg"
     file_key = f"images/{local_file}"
     category_map = {

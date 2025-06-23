@@ -151,15 +151,26 @@ class ImageUploadView(APIView):
                 # 保存图片信息到数据库
                 try:
                     logger.info("将图片信息保存到数据库...")
+                    tags_json = json.dumps(tags)
+
                     image = Image.objects.create(
                         image_url=image_url,
                         title=serializer.validated_data.get('title', ''),
-                        tags=tags,
-                        user=request.user,  # 上传者为当前认证的用户
+                        tags=tags_json,  # 存入合法 JSON 字符串
+                        user=request.user,
                         is_public=serializer.validated_data.get('is_public', False),
-                        category_id=category_id,  # 使用 category_id
-                        colors=colors  # 添加颜色数据
+                        category_id=category_id,
+                        colors=colors
                     )
+                    # image = Image.objects.create(
+                    #     image_url=image_url,
+                    #     title=serializer.validated_data.get('title', ''),
+                    #     tags=tags,
+                    #     user=request.user,  # 上传者为当前认证的用户
+                    #     is_public=serializer.validated_data.get('is_public', False),
+                    #     category_id=category_id,  # 使用 category_id
+                    #     colors=colors  # 添加颜色数据
+                    # )
                     logger.info(f"数据库保存成功，图片ID: {image.id}")
 
                     # 自动创建对应类别的相册并添加图片

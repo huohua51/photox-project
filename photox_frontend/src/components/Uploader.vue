@@ -19,15 +19,22 @@
         <div class="dialog-content">
           <h3>上传设置 ({{ files.length }}个文件)</h3>
 
-          <div class="category-section">
-            <select v-model="selectedCategory" @change="handleCategorySelect">
-              <option value="">选择现有分类</option>
-              <option v-for="category in categories" :key="category" :value="category">
-                {{ category }}
-              </option>
-            </select>
-            <div class="or-divider">或</div>
-            <input v-model="newCategory" placeholder="输入新分类" @input="handleNewCategoryInput">
+          <div class="upload-options">
+            <!-- 图片名称输入 -->
+            <div class="option-group">
+              <label>图片名称</label>
+              <input v-model="imageTitle" placeholder="输入图片名称" class="input-field">
+            </div>
+
+            <!-- 是否公开选项 -->
+            <div class="option-group">
+              <label>是否公开</label>
+              <div class="toggle-switch">
+                <input type="checkbox" v-model="isPublic" id="public-toggle">
+                <label for="public-toggle" class="toggle-label"></label>
+                <span class="toggle-text">{{ isPublic ? '公开' : '私有' }}</span>
+              </div>
+            </div>
           </div>
 
           <!-- <div class="progress-section">
@@ -38,8 +45,8 @@
           </div> -->
 
           <div class="dialog-actions">
-            <button @click="cancelUpload">取消</button>
-            <button @click="startUpload" :disabled="isUploading || (!selectedCategory && !newCategory)">
+            <button @click="cancelUpload" class="cancel-btn">取消</button>
+            <button @click="startUpload" :disabled="isUploading" class="upload-btn">
               {{ isUploading ? '上传中...' : '开始上传' }}
             </button>
           </div>
@@ -81,11 +88,11 @@ const emit = defineEmits([
 const fileInput = ref(null)
 const showDialog = ref(false)
 const files = ref([])
-const selectedCategory = ref('')
-const newCategory = ref('')
-const progress = ref(0)
+const imageTitle = ref('')
+const isPublic = ref(false)
 const isUploading = ref(false)
 const isDragHovering = ref(false)
+const progress = ref(0)
 
 // 拖入时高亮提示
 const onDragOver = () => {
@@ -103,10 +110,6 @@ const onDrop = async (e) => {
   const droppedFiles = Array.from(e.dataTransfer.files)
   handleFiles(droppedFiles)
 }
-// 计算最终分类
-const finalCategory = computed(() => {
-  return newCategory.value || selectedCategory.value
-})
 
 // 触发文件选择
 const triggerFileInput = () => {
@@ -118,6 +121,7 @@ const handleFileInput = (e) => {
   const inputFiles = Array.from(e.target.files)
   handleFiles(inputFiles)
 }
+
 // 抽离为通用文件处理方法
 const handleFiles = async (rawFiles) => {
   if (!rawFiles.length) return
@@ -143,30 +147,23 @@ const handleFiles = async (rawFiles) => {
 
   if (validFiles.length) {
     files.value = validFiles
+    // 设置默认图片名称为第一个文件的名称
+    imageTitle.value = validFiles[0].name
     showDialog.value = true
   }
 }
 
 // 开始上传
 const startUpload = async () => {
-  if (!finalCategory.value) return
-
   isUploading.value = true
   progress.value = 0
   emit('upload-start', {
-    category: finalCategory.value,
     files: files.value
   })
 
   try {
     const step = 100 / files.value.length
     const results = []
-
-    // 处理新分类
-    if (newCategory.value && !props.categories.includes(newCategory.value)) {
-      console.log('创建新分类:', newCategory.value)
-      emit('category-created', newCategory.value)
-    }
 
     for (const file of files.value) {
       // 使用imageService上传图片
@@ -191,110 +188,50 @@ const startUpload = async () => {
 // 上传图片到服务器API
 const uploadImageToServer = async (file) => {
     try {
-        console.log('开始上传到服务器...', file.name)
+        console.log('开始上传到服务器...', {
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type
+        })
         
-        // 使用imageService上传图片，并监控上传进度
+        // 使用 imageService 上传图片
         const response = await imageService.uploadImage(file, {
-            title: file.name || `Image_${Date.now()}`,
-            category: finalCategory.value,
+            title: imageTitle.value || file.name,
+            is_public: isPublic.value,
             onProgress: (percent) => {
-                console.log(`文件 ${file.name} 上传进度: ${percent}%`)
+                console.log(`上传进度: ${percent}%`)
             }
         })
         
-        console.log('上传响应:', response)
-        
-        // 从响应中提取数据
-        let imageData = null
-        
-        // 处理不同格式的响应
-        if (response && response.code === 0 && response.data) {
-            // 标准格式: {code:0, message:"success", data:{...}}
-            imageData = response.data
-        } else if (response && response.data && response.data.id) {
-            // 直接返回数据对象: {data:{...}}
-            imageData = response.data
-        } else if (response && response.id) {
-            // 直接返回数据: {...}
-            imageData = response
-        } else {
-            console.error('无法识别的响应格式:', response)
-            throw new Error('上传响应格式错误')
-        }
-        
-        // 至少应该有id和image_url
-        if (!imageData || !imageData.id || !imageData.image_url) {
-            console.error('上传响应缺少必要字段:', imageData)
-            throw new Error('上传响应缺少必要字段')
-        }
-        
-        console.log('处理后的图片数据:', imageData)
-        
-        // 返回标准化的图片数据
-        return {
-            id: imageData.id,
-            thumbnail: imageData.image_url,
-            url: imageData.image_url,
-            tags: typeof imageData.tags === 'string' ? JSON.parse(imageData.tags) : (imageData.tags || []),
-            category: imageData.category || finalCategory.value,
-            size: formatFileSize(file.size),
-            dimensions: await getImageDimensions(file),
-            type: file.type.split('/')[1].toUpperCase(),
-            createdAt: new Date().toLocaleString()
-        }
+        console.log('上传成功:', response)
+        return response
     } catch (error) {
-        console.error('上传出错:', error)
+        console.error('上传失败:', {
+            error: error,
+            response: error.response,
+            status: error.response?.status,
+            data: error.response?.data
+        })
+        
+        // 如果是网络错误或服务器错误，尝试重试
+        if (error.response && (error.response.status === 500 || error.response.status === 502)) {
+            console.log('服务器错误，尝试重试...')
+            // 等待1秒后重试
+            await new Promise(resolve => setTimeout(resolve, 1000))
+            return uploadImageToServer(file)
+        }
         throw error
     }
 }
 
-// 处理单个文件 (作为备用方法，当API不可用时使用)
-const processFile = (file) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = async (e) => {
-      try {
-        const dimensions = await getImageDimensions(file)
-        resolve({
-          id: Date.now(),
-          thumbnail: e.target.result,
-          url: e.target.result,
-          tags: [],
-          category: finalCategory.value,
-          size: formatFileSize(file.size),
-          dimensions,
-          type: file.type.split('/')[1].toUpperCase(),
-          createdAt: new Date().toLocaleString()
-        })
-      } catch (error) {
-        reject(error)
-      }
-    }
-    reader.readAsDataURL(file)
-  })
-}
-
-// 获取图片尺寸
-const getImageDimensions = (file) => {
-  return new Promise((resolve) => {
-    const img = new Image()
-    img.onload = () => {
-      resolve(`${img.width}x${img.height}`)
-      URL.revokeObjectURL(img.src)
-    }
-    img.src = URL.createObjectURL(file)
-  })
-}
-
 // 重置状态
 const resetState = () => {
-  isUploading.value = false
-  showDialog.value = false
-  files.value = []
-  selectedCategory.value = ''
-  newCategory.value = ''
-  progress.value = 0
-  fileInput.value.value = ''
+    isUploading.value = false
+    progress.value = 0
+    files.value = []
+    showDialog.value = false
+    imageTitle.value = ''
+    isPublic.value = false
 }
 
 // 取消上传
@@ -331,7 +268,47 @@ const handleCategorySelect = (event) => {
 </script>
   
 <style scoped>
-/* 上传对话框样式 */
+.uploader {
+  width: 100%;
+  height: 200px;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.upload-trigger {
+  width: 100%;
+  height: 100%;
+  border: 2px dashed var(--border-color);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background-color: var(--secondary-color);
+}
+
+.upload-trigger:hover {
+  border-color: var(--primary-color);
+  background-color: var(--bg-color);
+}
+
+.upload-trigger.drag-hover {
+  border-color: var(--primary-color);
+  background-color: var(--bg-color);
+  transform: scale(0.98);
+}
+
+.default-trigger {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  color: var(--text-color);
+  transition: color 0.3s;
+}
+
 .upload-dialog {
   position: fixed;
   top: 0;
@@ -343,91 +320,153 @@ const handleCategorySelect = (event) => {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  backdrop-filter: blur(4px);
 }
 
 .dialog-content {
-  background: #2b2b2b;
+  background: var(--secondary-color);
   padding: 2rem;
   border-radius: 12px;
   width: 400px;
-  color: white;
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  transition: all 0.3s ease;
 }
 
-.category-select {
+.dialog-content h3 {
+  margin: 0 0 1.5rem;
+  color: var(--text-color);
+  transition: color 0.3s;
+}
+
+.upload-options {
   display: flex;
-  gap: 10px;
-  align-items: center;
-  margin: 1rem 0;
-
-  select,
-  input {
-    flex: 1;
-    padding: 8px;
-    background: #404040;
-    border: 1px solid #555;
-    color: white;
-    border-radius: 4px;
-  }
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
 }
 
-.progress-bar {
-  height: 20px;
-  background: #333;
-  border-radius: 10px;
-  margin: 1rem 0;
+.option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.option-group label {
+  color: var(--text-color);
+  font-size: 0.9em;
+  transition: color 0.3s;
+}
+
+.input-field {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: all 0.3s ease;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.toggle-switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toggle-label {
   position: relative;
-  overflow: hidden;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  background-color: var(--border-color);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
 
-  .progress {
-    height: 100%;
-    background: #4CAF50;
-    transition: width 0.3s ease;
-  }
+.toggle-label:after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: white;
+  top: 2px;
+  left: 2px;
+  transition: all 0.3s ease;
+}
 
-  span {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    color: white;
-    font-size: 0.8em;
-  }
+input[type="checkbox"] {
+  display: none;
+}
+
+input[type="checkbox"]:checked + .toggle-label {
+  background-color: var(--primary-color);
+}
+
+input[type="checkbox"]:checked + .toggle-label:after {
+  transform: translateX(20px);
+}
+
+.toggle-text {
+  color: var(--text-color);
+  font-size: 0.9em;
+  transition: color 0.3s;
 }
 
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
-  margin-top: 1rem;
-
-  button {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: opacity 0.3s;
-
-    &:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    &:last-child {
-      background: #4CAF50;
-      color: white;
-    }
-  }
+  margin-top: 1.5rem;
 }
 
-/* 过渡动画 */
+.cancel-btn, .upload-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.cancel-btn {
+  background-color: var(--border-color);
+  color: var(--text-color);
+}
+
+.cancel-btn:hover {
+  background-color: var(--bg-color);
+}
+
+.upload-btn {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.upload-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.upload-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s;
+  transition: opacity 0.3s ease;
 }
 
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
 }
-
 </style>

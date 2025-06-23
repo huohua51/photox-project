@@ -1,105 +1,139 @@
 <template>
     <div class="album-manager">
-        <!-- 编辑模式按钮 -->
-        <div class="edit-button" @click="toggleEditMode">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
-            <span>{{ isEditMode ? '完成' : '编辑相册' }}</span>
+        <!-- 搜索框 -->
+        <div class="search-input-wrapper">
+            <div class="search-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+            </div>
+            <input 
+                type="text" 
+                v-model="searchQuery" 
+                placeholder="搜索相册..." 
+                class="search-input"
+                @input="handleSearch"
+            />
         </div>
 
-        <!-- 编辑模式下的相册列表 -->
-        <div v-if="isEditMode" class="album-list">
-            <div v-for="category in categories" :key="category" class="album-item">
-                <span>{{ category }}</span>
-                <!-- 不允许删除"全部"分类 -->
-                <button v-if="category !== '全部'" class="delete-button" @click="confirmDelete(category)">
+        <!-- 相册列表 -->
+        <div class="album-items" v-if="searchQuery">
+            <div v-for="album in filteredAlbums" 
+                 :key="album.id" 
+                 class="album-item"
+                 @click="handleAlbumClick(album)">
+                <div class="album-icon">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="3 6 5 6 21 6"></polyline>
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="3" y1="9" x2="21" y2="9"></line>
+                        <line x1="9" y1="21" x2="9" y2="9"></line>
                     </svg>
-                </button>
-            </div>
-        </div>
-
-        <!-- 确认删除对话框 -->
-        <div v-if="showConfirmDialog" class="confirm-dialog">
-            <div class="dialog-content">
-                <h3>确认删除</h3>
-                <p>您确定要删除 "{{ albumToDelete }}" 相册吗？此操作无法撤销，相册中的图片将被移到"全部"类别中。</p>
-                <div class="dialog-actions">
-                    <button @click="cancelDelete" class="cancel-btn">取消</button>
-                    <button @click="deleteAlbum" class="delete-btn">删除</button>
                 </div>
+                <span class="album-title">{{ album.title.replace('相册', '').trim() }}</span>
+            </div>
+            <!-- 无搜索结果提示 -->
+            <div v-if="filteredAlbums.length === 0" class="no-results">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <span>未找到相关相册</span>
             </div>
         </div>
     </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import albumService from '../api/albumService'
+import { ref, computed, watch } from 'vue'
 
 const props = defineProps({
     categories: {
         type: Array,
         required: true
+    },
+    albums: {
+        type: Array,
+        default: () => []
     }
 })
 
-const emit = defineEmits(['album-deleted'])
+const emit = defineEmits(['select-category'])
 
-const isEditMode = ref(false)
-const showConfirmDialog = ref(false)
-const albumToDelete = ref('')
+const searchQuery = ref('')
+const searchTimeout = ref(null)
 
-// 切换编辑模式
-const toggleEditMode = () => {
-    isEditMode.value = !isEditMode.value
-}
+// 监听相册数据变化
+watch(() => props.albums, (newAlbums) => {
+    console.log('相册数据更新:', newAlbums)
+}, { deep: true })
 
-// 确认删除对话框
-const confirmDelete = (album) => {
-    albumToDelete.value = album
-    showConfirmDialog.value = true
-}
-
-// 取消删除
-const cancelDelete = () => {
-    showConfirmDialog.value = false
-    albumToDelete.value = ''
-}
-
-// 删除相册
-const deleteAlbum = async () => {
-    try {
-        // 这里应该调用API删除相册
-        // 注释掉的代码是实际应该执行的API调用
-        // const albumId = getAlbumIdByName(albumToDelete.value)
-        // await albumService.deleteAlbum(albumId)
-
-        console.log(`删除相册: ${albumToDelete.value}`)
-
-        // 通知父组件已删除相册
-        emit('album-deleted', albumToDelete.value)
-
-        // 关闭确认对话框
-        showConfirmDialog.value = false
-        albumToDelete.value = ''
-    } catch (error) {
-        console.error('删除相册失败:', error)
-        // 这里可以添加错误处理逻辑
+// 过滤相册列表
+const filteredAlbums = computed(() => {
+    const query = searchQuery.value.toLowerCase().trim()
+    console.log('相册搜索条件:', {
+        query: query,
+        totalAlbums: props.albums.length,
+        albums: props.albums
+    })
+    
+    if (!query) {
+        return []
     }
+    
+    const filtered = props.albums.filter(album => {
+        if (!album) {
+            console.warn('发现无效的相册数据:', album)
+            return false
+        }
+
+        const title = (album.title || '').toLowerCase()
+        const category = album.category ? album.category.toLowerCase() : ''
+        
+        const matches = title.includes(query) || category.includes(query)
+        
+        console.log('相册匹配结果:', {
+            id: album.id,
+            title: album.title,
+            category: album.category,
+            matches: matches,
+            query: query
+        })
+        
+        return matches
+    })
+    
+    console.log('过滤后的相册数量:', filtered.length)
+    return filtered
+})
+
+// 处理搜索
+const handleSearch = () => {
+    if (searchTimeout.value) {
+        clearTimeout(searchTimeout.value)
+    }
+    searchTimeout.value = setTimeout(() => {
+        console.log('搜索相册:', {
+            query: searchQuery.value,
+            albums: props.albums
+        })
+    }, 300)
 }
 
-// 辅助函数：根据相册名称获取相册ID（实际应用中可能需要调整）
-const getAlbumIdByName = (albumName) => {
-    // 这里应该有一个从相册名称到ID的映射
-    // 在实际应用中，这可能需要从后端获取或维护一个映射表
-    return albumName // 示例中简单返回相册名称作为ID
+// 处理相册点击
+const handleAlbumClick = (album) => {
+    searchQuery.value = ''
+    const category = album.category || album.title.replace('相册', '').trim()
+    console.log('选择相册:', {
+        id: album.id,
+        title: album.title,
+        category: category
+    })
+    emit('select-category', category)
 }
 </script>
 
@@ -107,165 +141,120 @@ const getAlbumIdByName = (albumName) => {
 .album-manager {
     margin-top: 10px;
     position: relative;
+    background-color: var(--secondary-color);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--border-color);
+    transition: all 0.3s ease;
 }
 
-.edit-button {
+.search-input-wrapper {
+    padding: 12px;
+    border-bottom: 1px solid var(--border-color);
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 10px 16px;
-    background-color: #176fd4;
-    color: white;
-    border-radius: 8px;
-    cursor: pointer;
+    background-color: var(--bg-color);
+    transition: background-color 0.3s, border-color 0.3s;
+}
+
+.search-icon {
+    color: var(--text-color);
+    opacity: 0.6;
+    display: flex;
+    align-items: center;
+    transition: color 0.3s;
+}
+
+.search-input {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text-color);
     font-size: 0.95em;
-    width: fit-content;
-    margin-bottom: 15px;
-    transition: all 0.2s ease;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    padding: 4px 0;
+    transition: color 0.3s;
 }
 
-.edit-button:hover {
-    background-color: #1c84ef;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+.search-input:focus {
+    outline: none;
 }
 
-.album-list {
-    background-color: #2b2b2b;
-    border-radius: 12px;
-    overflow: hidden;
-    margin-top: 15px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    border: 1px solid #3a3a3a;
-    transition: all 0.3s ease;
+.search-input::placeholder {
+    color: var(--text-color);
+    opacity: 0.6;
+}
+
+.album-items {
+    max-height: 300px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) var(--bg-color);
+}
+
+.album-items::-webkit-scrollbar {
+    width: 6px;
+}
+
+.album-items::-webkit-scrollbar-track {
+    background: var(--bg-color);
+}
+
+.album-items::-webkit-scrollbar-thumb {
+    background-color: var(--border-color);
+    border-radius: 3px;
 }
 
 .album-item {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 14px 16px;
-    border-bottom: 1px solid #3a3a3a;
-    color: #e8e8e8;
-    transition: background-color 0.2s;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-color);
+    transition: all 0.3s ease;
+    cursor: pointer;
 }
 
 .album-item:hover {
-    background-color: #333;
+    background-color: var(--bg-color);
 }
 
 .album-item:last-child {
     border-bottom: none;
 }
 
-.delete-button {
-    background: none;
-    border: none;
-    color: #ff4d4f;
-    cursor: pointer;
-    padding: 8px;
+.album-icon {
+    color: var(--text-color);
+    opacity: 0.6;
     display: flex;
     align-items: center;
-    justify-content: center;
-    border-radius: 6px;
-    transition: all 0.2s ease;
+    transition: color 0.3s;
 }
 
-.delete-button:hover {
-    background-color: rgba(255, 77, 79, 0.15);
-    transform: scale(1.1);
+.album-title {
+    font-size: 0.95em;
+    color: var(--text-color);
+    transition: color 0.3s;
 }
 
-.confirm-dialog {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.75);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    backdrop-filter: blur(4px);
-    animation: fadeIn 0.2s ease;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-.dialog-content {
-    background-color: #2b2b2b;
-    width: 90%;
-    max-width: 400px;
-    border-radius: 16px;
+.no-results {
     padding: 24px;
-    color: white;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-    animation: slideUp 0.3s ease;
-    border: 1px solid #3a3a3a;
-}
-
-@keyframes slideUp {
-    from { transform: translateY(20px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
-}
-
-.dialog-content h3 {
-    margin-top: 0;
-    color: #ff4d4f;
-    font-size: 1.5em;
-    margin-bottom: 16px;
-}
-
-.dialog-content p {
-    line-height: 1.6;
-    margin-bottom: 20px;
-    color: #ddd;
-}
-
-.dialog-actions {
+    text-align: center;
+    color: var(--text-color);
+    opacity: 0.6;
+    font-size: 0.9em;
     display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    margin-top: 24px;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    transition: color 0.3s;
 }
 
-.dialog-actions button {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    font-size: 1em;
-}
-
-.cancel-btn {
-    background-color: #4b4b4b;
-    color: white;
-}
-
-.cancel-btn:hover {
-    background-color: #5a5a5a;
-    transform: translateY(-2px);
-}
-
-.delete-btn {
-    background-color: #ff4d4f;
-    color: white;
-}
-
-.delete-btn:hover {
-    background-color: #ff6668;
-    transform: translateY(-2px);
-    box-shadow: 0 2px 8px rgba(255, 77, 79, 0.4);
-}
-
-.delete-btn:active, .cancel-btn:active {
-    transform: translateY(0);
+.no-results svg {
+    color: var(--text-color);
+    opacity: 0.4;
+    transition: color 0.3s;
 }
 </style>

@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import api from '@/api'
 
 export const useUserStore = defineStore('user', {
   state: () => ({
@@ -14,13 +15,26 @@ export const useUserStore = defineStore('user', {
     logout() {
       this.user = null
       this.isLoggedIn = false
+      localStorage.removeItem('token')
+      localStorage.removeItem('refresh_token')
       localStorage.removeItem('user')
     },
-    initialize() {
-      const user = localStorage.getItem('user')
-      if (user) {
-        this.user = JSON.parse(user)
+    async initialize() {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        this.user = null
+        this.isLoggedIn = false
+        return
+      }
+      
+      try {
+        const response = await api.auth.getCurrentUser()
+        this.user = response.data
         this.isLoggedIn = true
+        localStorage.setItem('user', JSON.stringify(response.data))
+      } catch (error) {
+        console.error('Token 验证失败:', error)
+        this.logout()
       }
     }
   }

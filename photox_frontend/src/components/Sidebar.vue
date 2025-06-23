@@ -26,23 +26,22 @@ defineEmits(['select-category'])
 }
 
 .sidebar div {
-  padding: 12px 16px;
+  padding: 10px 20px;
+  margin: 5px 0;
   cursor: pointer;
-  border-radius: 8px;
-  margin-bottom: 6px;
-  color: #e8e8e8;
-  transition: all 0.2s ease;
-  font-weight: 500;
+  border-radius: 6px;
+  color: var(--text-color);
+  transition: all 0.3s ease;
 }
 
 .sidebar div:hover {
-  background: rgba(23, 111, 212, 0.15);
+  background: var(--primary-color);
   color: white;
 }
 
 .sidebar div.active {
-  background: #176fd4;
+  background: var(--primary-color);
   color: white;
-  box-shadow: 0 2px 8px rgba(23, 111, 212, 0.3);
+  font-weight: 500;
 }
 </style>

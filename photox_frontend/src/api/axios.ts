@@ -2,7 +2,7 @@ import axios from 'axios'
 
 // 创建 axios 实例
 const instance = axios.create({
-    baseURL: 'http://8.148.71.20:8000',  // 后端 API 的基础 URL（已改为服务器地址）
+    baseURL: 'http://127.0.0.1:8000',  // 后端 API 的基础 URL（已改为服务器地址）
     timeout: 5000,  // 请求超时时间
     headers: {
         'Content-Type': 'application/json'

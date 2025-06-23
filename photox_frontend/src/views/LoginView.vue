@@ -14,7 +14,6 @@
 
             <div id="password-area">
                 <input placeholder="密码" id="password" class="input" type="password" required v-model="password" />
-                <a @click="forgotPassword">忘记密码?</a>
             </div>
 
             <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
@@ -36,10 +35,10 @@
 
 <script setup>
 import { ref } from 'vue'
-import api from '@/api' // 强制统一使用 src/api/index.js 实例
 import { useRouter } from 'vue-router'
 import { onMounted, onUnmounted } from 'vue'
 import { useUserStore } from '@/stores/user'
+import api from '@/api'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -49,57 +48,40 @@ const password = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 
-// 替换 axios.post 为统一 api 实例，并适配 baseURL
 const handleLogin = async () => {
+    if (!username.value || !password.value) {
+        errorMessage.value = '请输入用户名和密码'
+        return
+    }
+
     loading.value = true
     errorMessage.value = ''
+
     try {
-        console.log('开始登录请求...')
+        const response = await api.auth.login(username.value, password.value)
         
-        // 使用api.login函数代替直接的post请求
-        const response = await api.login(username.value, password.value)
-        console.log('登录响应:', response)
+        // 保存 token
+        localStorage.setItem('token', response.data.access)
+        localStorage.setItem('refresh_token', response.data.refresh)
         
-        // 处理不同格式的响应
-        let tokens = null
+        // 设置用户状态
+        userStore.setUser({ 
+            username: username.value,
+            email: response.data.email || '',
+            avatar: response.data.avatar || ''
+        })
         
-        // 情况1: 标准格式 {code:0, message:'成功', data:{access,refresh}}
-        if (response.code === 0 && response.data) {
-            tokens = {
-                access: response.data.access,
-                refresh: response.data.refresh
-            }
-        }
-        // 情况2: 简单格式 {access, refresh}
-        else if (response.access && response.refresh) {
-            tokens = {
-                access: response.access,
-                refresh: response.refresh
-            }
-        }
-        
-        if (tokens) {
-            localStorage.setItem('token', tokens.access)
-            localStorage.setItem('refresh_token', tokens.refresh)
-            userStore.setUser({ username: username.value })
-            router.push('/')
-        } else {
-            console.error('登录响应格式不符合预期:', response)
-            errorMessage.value = '登录响应格式错误，请联系管理员'
-        }
+        // 获取重定向地址
+        const redirect = router.currentRoute.value.query.redirect
+        // 如果有重定向地址，跳转到该地址，否则跳转到首页
+        router.push(redirect || '/')
     } catch (error) {
-        console.error('登录错误:', error)
-        errorMessage.value = error.message || '登录失败，请检查用户名和密码'
+        console.error('登录失败:', error)
+        errorMessage.value = error.response?.data?.detail || '登录失败，请重试'
+        // 登录失败时不自动跳转，让用户可以点击返回按钮
     } finally {
         loading.value = false
     }
-}
-
-const forgotPassword = () => {
-    // 实现忘记密码功能
-    alert('忘记密码功能将很快上线!')
-    // 这里可以添加跳转到重置密码页面的逻辑
-    // router.push('/forgot-password')
 }
 
 // 添加事件处理函数

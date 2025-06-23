@@ -1,4 +1,26 @@
-import api from './index'
+import apiService from './index'
+const { api, images } = apiService
+
+// 工具函数：格式化文件大小
+const formatFileSize = (bytes) => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+// 工具函数：获取图片尺寸
+const getImageDimensions = (file) => {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      resolve(`${img.width}x${img.height}`)
+      URL.revokeObjectURL(img.src)
+    }
+    img.src = URL.createObjectURL(file)
+  })
+}
 
 /**
  * 图片服务API
@@ -15,111 +37,94 @@ const imageService = {
    */
   uploadImage: async (imageFile, options = {}) => {
     try {
-      console.log('开始上传图片...', imageFile.name, imageFile.size, '字节')
+      console.log('开始上传图片...', {
+        fileName: imageFile.name,
+        fileSize: imageFile.size,
+        fileType: imageFile.type
+      })
       
       // 验证文件是否为图片
       if (!imageFile.type.startsWith('image/')) {
         throw new Error('仅支持图片文件')
       }
       
+      // 检查是否有token
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('请先登录')
+      }
+      
       // 创建FormData
       const formData = new FormData()
       formData.append('image', imageFile)
       
+      // 添加标题（可选）
       if (options.title) {
         formData.append('title', options.title)
-        console.log('添加标题:', options.title)
       }
-      if (options.category) {
-        formData.append('category', options.category)
-        console.log('添加分类:', options.category)
-      }
+      
+      // 添加公开状态（可选，默认为false）
       if (options.is_public !== undefined) {
         formData.append('is_public', options.is_public)
-        console.log('添加公开状态:', options.is_public)
       }
 
-      // 使用直接URL而不是api实例，避免拦截器影响
-      const url = 'http://8.148.71.20:8000/api/v1/images/upload/'
-      console.log('上传到URL:', url)
-      
-      // 获取token并添加到请求头
-      const token = localStorage.getItem('token')
-      let headers = {}
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-        console.log('已添加授权头')
-      } else {
-        console.warn('未找到授权令牌')
+      // 打印FormData内容
+      for (let pair of formData.entries()) {
+        console.log('FormData内容:', pair[0], pair[1])
       }
-      
-      // 使用原生fetch以最大兼容性上传文件
-      console.log('开始发送fetch请求...')
-      
-      const response = await fetch(url, {
-        method: 'POST',
-        body: formData,
-        headers: headers,
-        credentials: 'same-origin'
+
+      // 使用 api.post 直接上传
+      const response = await api.post('/images/upload/', formData, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        // 保持原始 FormData 格式，不进行任何转换
+        transformRequest: [(data) => data],
+        onUploadProgress: (progressEvent) => {
+          if (options.onProgress) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+            options.onProgress(percentCompleted)
+          }
+        }
       })
       
-      console.log('fetch响应状态:', response.status, response.statusText)
+      console.log('上传响应:', response)
       
-      // 尝试以文本形式读取响应
-      const responseText = await response.text()
-      console.log('响应内容:', responseText)
-      
-      if (!response.ok) {
-        // 尝试解析错误响应
-        try {
-          const errorData = JSON.parse(responseText)
-          if (errorData.code === 1 && errorData.message) {
-            throw new Error(errorData.message)
-          }
-          if (errorData.error) {
-            throw new Error(errorData.error)
-          }
-        } catch (parseError) {
-          // 解析失败，使用原始错误
-          console.error('解析错误失败:', parseError)
-        }
-        throw new Error(`上传失败: ${response.status} ${responseText || response.statusText}`)
+      // 检查响应格式
+      if (!response) {
+        throw new Error('无效的响应格式')
       }
       
-      // 尝试解析JSON
-      let resultData
-      try {
-        resultData = JSON.parse(responseText)
-        console.log('解析后的JSON响应:', resultData)
-      } catch (e) {
-        console.error('JSON解析失败:', e)
-        throw new Error('无法解析服务器响应为JSON')
+      // 返回标准化的图片数据
+      return {
+        id: response.id,
+        thumbnail: response.image_url,
+        url: response.image_url,
+        size: formatFileSize(imageFile.size),
+        dimensions: await getImageDimensions(imageFile),
+        type: imageFile.type.split('/')[1].toUpperCase(),
+        createdAt: new Date().toLocaleString()
       }
-      
-      // 规范化响应格式
-      let standardResponse = {}
-      
-      // 情况1: {code: 0, message: '成功', data: {...}}
-      if (resultData.code === 0 && resultData.data) {
-        standardResponse = resultData
-      }
-      // 情况2: 直接是数据对象 {...}
-      else if (resultData.id && resultData.image_url) {
-        standardResponse = {
-          code: 0,
-          message: '上传成功',
-          data: resultData
-        }
-      }
-      // 其他未知情况
-      else {
-        console.warn('未知的响应格式:', resultData)
-        throw new Error('服务器返回的响应格式不符合预期')
-      }
-      
-      return standardResponse
     } catch (error) {
-      console.error('图片上传服务失败 (imageService.js):', error)
+      console.error('图片上传服务失败:', error)
+      if (error.response) {
+        console.error('错误响应:', error.response.data)
+        console.error('错误状态:', error.response.status)
+        console.error('错误头信息:', error.response.headers)
+        console.error('请求头信息:', error.config?.headers)
+        
+        // 处理特定错误
+        if (error.response.status === 401) {
+          throw new Error('登录已过期，请重新登录')
+        } else if (error.response.status === 413) {
+          throw new Error('文件太大，请选择小于5MB的图片')
+        } else if (error.response.status === 415) {
+          throw new Error('不支持的图片格式')
+        } else if (error.response.status === 500) {
+          const errorMessage = error.response.data?.message || '服务器错误，请稍后重试'
+          throw new Error(errorMessage)
+        }
+      }
       throw error
     }
   },
@@ -129,11 +134,13 @@ const imageService = {
    * @param {number|string} imageId - 图片ID
    * @returns {Promise<Object>} 图片详情
    */
-  getImageDetails: async (imageId) => {
+  getImageDetail: async (imageId) => {
     try {
-      return await api.get(`/images/${imageId}/`)
+      const response = await api.get(`/images/${imageId}/`)
+      console.log('获取图片详情响应:', response)
+      return response
     } catch (error) {
-      console.error(`获取图片 ${imageId} 详情失败`, error)
+      console.error('获取图片详情失败', error)
       throw error
     }
   },
@@ -161,9 +168,16 @@ const imageService = {
    */
   deleteImage: async (imageId) => {
     try {
-      return await api.delete(`/images/${imageId}/`)
+      console.log('发送删除请求:', imageId)
+      await api.delete(`/images/${imageId}/`)
+      // 204 状态码表示删除成功，不需要返回任何数据
+      return true
     } catch (error) {
-      console.error(`删除图片 ${imageId} 失败`, error)
+      console.error(`删除图片 ${imageId} 失败:`, error)
+      if (error.response) {
+        console.error('错误响应:', error.response.data)
+        console.error('错误状态:', error.response.status)
+      }
       throw error
     }
   },
@@ -202,6 +216,21 @@ const imageService = {
       }
     } catch (error) {
       console.error('获取用户图片列表失败', error)
+      throw error
+    }
+  },
+  
+  /**
+   * 获取图片分类
+   * @returns {Promise<Object>} 图片分类列表
+   */
+  getImageCategories: async () => {
+    try {
+      const response = await api.images.getCategories()
+      console.log('获取分类响应:', response)
+      return response
+    } catch (error) {
+      console.error('获取图片分类失败', error)
       throw error
     }
   }

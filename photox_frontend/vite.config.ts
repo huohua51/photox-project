@@ -17,9 +17,11 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': {
-        target: 'http://8.148.71.20:8000', // 你的Django后端服务器地址
-        changeOrigin: true
+      '/api/v1': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api\/v1/, '/api/v1')
       }
     }
   },

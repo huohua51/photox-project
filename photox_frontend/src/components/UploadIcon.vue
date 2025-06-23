@@ -30,9 +30,15 @@
     cursor: pointer;
     align-items: center;
     justify-content: center;
-    border: 2px solid #898989;
-    background-color: #212121;
+    border: 2px solid var(--border-color);
+    background-color: var(--secondary-color);
     border-radius: 10px;
+    transition: all 0.3s ease;
+}
+
+.custum-file-upload:hover {
+    border-color: var(--primary-color);
+    background-color: var(--bg-color);
 }
 
 .custum-file-upload .icon {
@@ -43,7 +49,8 @@
 
 .custum-file-upload .icon svg {
     height: 80px;
-    fill: #e8e8e8;
+    fill: var(--text-color);
+    transition: fill 0.3s;
 }
 
 .custum-file-upload .text {
@@ -54,9 +61,11 @@
 
 .custum-file-upload .text span {
     font-weight: 400;
-    color: #e8e8e8;
+    color: var(--text-color);
+    transition: color 0.3s;
 }
 
 .custum-file-upload input {
     display: none;
-}</style>
+}
+</style>

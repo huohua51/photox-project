@@ -106,15 +106,21 @@ const handleRegister = async () => {
   
   loading.value = true
   try {
-    await api.post('/auth/register/', {
+    const response = await api.auth.register({
       username: username.value,
       email: email.value,
       password: password.value,
       password_confirm: password_confirm.value
     })
-    router.push('/login')
+    
+    if (response.code === 0) {
+      router.push('/login')
+    } else {
+      errorMessage.value = response.message || '注册失败，请重试'
+    }
   } catch (error) {
-    errorMessage.value = error.response?.data?.message || '注册失败，请重试'
+    console.error('注册错误:', error)
+    errorMessage.value = error.response?.data?.message || error.message || '注册失败，请重试'
   } finally {
     loading.value = false
   }
